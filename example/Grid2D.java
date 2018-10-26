@@ -35,48 +35,69 @@ public class Grid2D {
         return Algorithms.sampleMissingLabels(unlabelledNetwork, expectedParams, numLabellingRounds);
     }
 
-    private static void runTrainingExperiment(Network labelledNetwork, int numTrainingRounds, double learningRate) {
-        // Sample labels for network based on parameters
+    private static void runTrainingExperiment(int gridSize, double alpha, double beta, int numLabellingRounds,
+                                              double propLabelsToRetain, int descentSteps, int samplingPassesBurnIn,
+                                              int samplingPassesBetweenDescents, double learningRate) {
+        // Sample labels for network based on parameters. Keep only a proportion of these for training.
+        Network trainingNetwork = Algorithms.eraseLabels(
+                makeLabelledNetwork(gridSize, alpha, beta, numLabellingRounds), propLabelsToRetain);
+
         // Use gradient descent algorithm to fit parameters for the labelled network
         // If this works, we should get something close to the original parameters
-        Parameters fittedParams = Algorithms.train(labelledNetwork, numTrainingRounds, learningRate);
+        Parameters fittedParams = Algorithms.train(
+                trainingNetwork, descentSteps, samplingPassesBurnIn, samplingPassesBetweenDescents, learningRate);
         System.out.println(fittedParams);
     }
 
-    private static void runPredictionExperiment(Network labelledNetwork, double propLabelsToRetain,
-                                                double alpha, double beta, int numRoundsBurnIn,
-                                                int numRoundsBetweenSamples, int numSamples) {
-        // Sample labels for network based on parameters
+    private static void runPredictionExperiment(int gridSize, double alpha, double beta, int numLabellingRounds,
+                                                double propLabelsToRetain, int observations, int samplingPassesBurnIn,
+                                                int samplingPassesBetweenObservations) {
+        // Sample labels for network based on parameters.
+        // Only reveal a subset of these labels - it is the job of the model to predict the remaining labels.
+        Network fullyLabelledNetwork = makeLabelledNetwork(gridSize, alpha, beta, numLabellingRounds);
+        Map<Vertex, Boolean> realLabels = fullyLabelledNetwork.getLabels();
+        Network testNetwork = Algorithms.eraseLabels(fullyLabelledNetwork, propLabelsToRetain);
+
         // Erase some of the labels, and try and predict what these labels are based on the parameters passed.
         // If this works, we should get an accuracy above 0.5.
-        Map<Vertex, Boolean> trueLabels = labelledNetwork.getLabels();
-        Network partiallyLabelledNetwork = Algorithms.eraseLabels(labelledNetwork, propLabelsToRetain);
         Parameters parameters = new Parameters(alpha, beta);
-        Map<Vertex, Double> predictions = Algorithms.predict(partiallyLabelledNetwork,
-                parameters, numRoundsBurnIn, numRoundsBetweenSamples, numSamples);
+        Map<Vertex, Double> predictions = Algorithms.predict(
+                testNetwork, parameters, observations, samplingPassesBurnIn, samplingPassesBetweenObservations);
 
         int allCount = 0;
         int correctCount = 0;
         for (Vertex vertex : predictions.keySet()) {
             allCount++;
-            if ((predictions.get(vertex) > 0.5) == trueLabels.get(vertex)) {
+            if ((predictions.get(vertex) > 0.5) == realLabels.get(vertex)) {
                 correctCount++;
             }
         }
         System.out.printf("Number of predictions = %d, Number correct = %d%n", allCount, correctCount);
     }
 
-    private static void runBothExperiments(int gridSize, double alpha, double beta, int numLabellingRounds,
-                                           int numTrainingRounds, double learningRate, double propLabelsToRetain,
-                                           int numRoundsBurnIn, int numRoundsBetweenSamples, int numSamples) {
-        Network labelledNetwork = makeLabelledNetwork(gridSize, alpha, beta, numLabellingRounds);
-        runTrainingExperiment(labelledNetwork, numTrainingRounds, learningRate);
-        runPredictionExperiment(labelledNetwork, propLabelsToRetain, alpha, beta, numRoundsBurnIn,
-                numRoundsBetweenSamples, numSamples);
-    }
-
     public static void main(String[] args) {
-        runBothExperiments(100, 0.3, 0.5, 1000, 1000, 1.0e-5, 0.2, 1000, 50, 50);
+        // For both experiments
+        int gridSize = 100;
+        double alpha = 0.3;
+        double beta = 0.5;
+        int numLabellingRounds = 1000;
+        double propLabelsToRetain = 0.5;
+
+        // For training experiment
+        int descentSteps = 1000;
+        int samplingPassesBurnInForTrain = 250;
+        int samplingPassesBetweenDescents = 1;
+        double learningRate = 1.0e-5;
+
+        // For prediction experiment
+        int observations = 50;
+        int samplingPassesBurnInForPredict = 1000;
+        int samplingPassesBetweenObservations = 50;
+
+        runTrainingExperiment(gridSize, alpha, beta, numLabellingRounds, propLabelsToRetain,
+                descentSteps, samplingPassesBurnInForTrain, samplingPassesBetweenDescents, learningRate);
+        runPredictionExperiment(gridSize, alpha, beta, numLabellingRounds, propLabelsToRetain,
+                observations, samplingPassesBurnInForPredict, samplingPassesBetweenObservations);
     }
 
 }

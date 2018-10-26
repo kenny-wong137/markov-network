@@ -14,19 +14,24 @@ public class Algorithms {
     /**
      * Calculates alpha and beta parameters that maximise the likelihood for the known labels in the network
      * @param network network
-     * @param numRounds number of gradient descent / Gibbs sampling rounds
+     * @param descentSteps number of gradient descent steps
+     * @param samplingPassesBurnIn number of Gibbs sampling passes before the first gradient descent round
+     * @param samplingPassesBetweenDescents number of Gibbs sampling passes between each gradient descent round
      * @param learningRate learning rate
      * @return alpha and beta parameters
      */
-    public static Parameters train(Network network, int numRounds, double learningRate) {
+    public static Parameters train(Network network, int descentSteps, int samplingPassesBurnIn,
+                                   int samplingPassesBetweenDescents, double learningRate) {
         Parameters parameters = new Parameters(); // initialised to zero
         Assignment targetAssignment = Assignment.samplingUnknownGivenKnown(network);
         Assignment observedAssignment = Assignment.samplingAll(network);
 
-        for (int round = 0; round < numRounds; round++) {
-            // Performing one Gibbs sampling round per gradient descent round - this is an arbitrary choice
-            targetAssignment.performSamplingRound(parameters); // does nothing in case where all training labels known
-            observedAssignment.performSamplingRound(parameters);
+        for (int descentStep = 0; descentStep < descentSteps; descentStep++) {
+            int samplingPasses = (descentStep == 0) ? samplingPassesBurnIn : samplingPassesBetweenDescents;
+            for (int samplingPass = 0; samplingPass < samplingPasses; samplingPass++) {
+                targetAssignment.performSamplingRound(parameters); // does nothing if all training labels known
+                observedAssignment.performSamplingRound(parameters);
+            }
             network.performGradientDescentRound(targetAssignment, observedAssignment, parameters, learningRate);
         }
 
@@ -38,20 +43,20 @@ public class Algorithms {
      * the supplied parameters
      * @param network network
      * @param parameters parameters for model
-     * @param numRoundsBurnIn number of Gibbs sampling rounds before first sample
-     * @param numRoundsBetweenSamples number of Gibbs sampling rounds between successive samples
-     * @param numSamples number of samples to take for computing probability
-     * @return map (unlabelled vertex) -> (probability of true label, given model)
+     * @param observations number of observations to take for each label, to estimate probability from
+     * @param samplingPassesBurnIn number of Gibbs sampling passes before first sample
+     * @param samplingPassesBetweenObservations number of Gibbs sampling passes between successive label observations
+     * @return map (unlabelled vertex) -> (probability of true label for this vertex, given model)
      */
-    public static Map<Vertex, Double> predict(Network network, Parameters parameters,
-                                              int numRoundsBurnIn, int numRoundsBetweenSamples, int numSamples) {
+    public static Map<Vertex, Double> predict(Network network, Parameters parameters, int observations,
+                                              int samplingPassesBurnIn, int samplingPassesBetweenObservations) {
         Assignment assignment = Assignment.samplingUnknownGivenKnown(network);
 
         // Sampling
         Map<Vertex, Integer> positiveCountsByVertex = new HashMap<>(); // i.e. num +ve labels sampled so far
-        for (int sample = 0; sample < numSamples; sample++) {
-            int numRounds = (sample == 0) ? numRoundsBurnIn : numRoundsBetweenSamples;
-            for (int round = 0; round < numRounds; round++) {
+        for (int observation = 0; observation < observations; observation++) {
+            int samplingPasses = (observation == 0) ? samplingPassesBurnIn : samplingPassesBetweenObservations;
+            for (int samplingPass = 0; samplingPass < samplingPasses; samplingPass++) {
                 assignment.performSamplingRound(parameters);
             }
             for (Vertex vertex : assignment.getVerticesToSample()) {
@@ -65,7 +70,7 @@ public class Algorithms {
         Map<Vertex, Double> probabilities = new HashMap<>();
         for (Vertex vertex : assignment.getVerticesToSample()) {
             int positiveCount = positiveCountsByVertex.computeIfAbsent(vertex, key -> 0);
-            double probability = ((double) positiveCount) / ((double) numSamples);
+            double probability = ((double) positiveCount) / ((double) observations);
             probabilities.put(vertex, probability);
         }
 
