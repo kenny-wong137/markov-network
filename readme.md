@@ -46,6 +46,9 @@ we wish to find the marginal probabilities `P(y_i | y_L, x_I)` for individual `i
 
 This quantity is again computable by Gibbs sampling.
 
-In my implementation, I perform the Gibbs sampling *in parallel*. This means that, when sampling a given variable, the view we have of the neighbouring variables
-can potentially be slightly out of date. I have never seen any theoretical analysis of this approximation, but given how many vertices we have relative to the number
+**A parallel Gibbs sampling approximation**
+
+In my implementation, I perform the Gibbs sampling *in parallel*. This means that, when sampling a given variable,
+the view we have of the neighbouring variables can potentially be slightly out of date.
+I have never seen any theoretical analysis of this approximation, but given how many vertices we have relative to the number
 of cores on a computer, this seems like a sensible performance optimisation to make.
